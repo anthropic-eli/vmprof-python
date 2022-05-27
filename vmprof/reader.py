@@ -1,23 +1,21 @@
-from __future__ import print_function
+import datetime
+import gzip
+import io
 import os
 import struct
 import sys
-from six.moves import xrange
-import io
-import gzip
-import datetime
 
-PY3  = sys.version_info[0] >= 3
+PY3 = sys.version_info[0] >= 3
 
 
-MARKER_STACKTRACE = b'\x01'
-MARKER_VIRTUAL_IP = b'\x02'
-MARKER_TRAILER = b'\x03'
-MARKER_INTERP_NAME = b'\x04' # do not use! deprecated
-MARKER_HEADER = b'\x05'
-MARKER_TIME_N_ZONE = b'\x06'
-MARKER_META = b'\x07'
-MARKER_NATIVE_SYMBOLS = b'\x08'
+MARKER_STACKTRACE = b"\x01"
+MARKER_VIRTUAL_IP = b"\x02"
+MARKER_TRAILER = b"\x03"
+MARKER_INTERP_NAME = b"\x04"  # do not use! deprecated
+MARKER_HEADER = b"\x05"
+MARKER_TIME_N_ZONE = b"\x06"
+MARKER_META = b"\x07"
+MARKER_NATIVE_SYMBOLS = b"\x08"
 
 
 VERSION_BASE = 0
@@ -45,11 +43,14 @@ VMPROF_NATIVE_TAG = 7
 class AssemblerCode(int):
     pass
 
+
 class JittedCode(int):
     pass
 
+
 class NativeCode(int):
     pass
+
 
 def wrap_kind(kind, pc):
     if kind == VMPROF_ASSEMBLER_TAG:
@@ -61,16 +62,25 @@ def wrap_kind(kind, pc):
     assert kind == VMPROF_CODE_TAG
     return pc
 
+
 def gunzip(fileobj):
-    is_gzipped = fileobj.read(2) == b'\037\213'
+    is_gzipped = fileobj.read(2) == b"\037\213"
     fileobj.seek(-2, os.SEEK_CUR)
     if is_gzipped:
         fileobj = io.BufferedReader(gzip.GzipFile(fileobj=fileobj))
     return fileobj
 
-class ReaderStatus(object):
-    def __init__(self, interp_name, period, version, previous_virtual_ips=None,
-                 profile_memory=False, profile_lines=False):
+
+class ReaderStatus:
+    def __init__(
+        self,
+        interp_name,
+        period,
+        version,
+        previous_virtual_ips=None,
+        profile_memory=False,
+        profile_lines=False,
+    ):
         if previous_virtual_ips is not None:
             self.virtual_ips = previous_virtual_ips
         else:
@@ -82,14 +92,17 @@ class ReaderStatus(object):
         self.profile_memory = profile_memory
         self.profile_lines = profile_lines
 
+
 class FileReadError(Exception):
     pass
+
 
 def assert_error(condition, error="malformed file"):
     if not condition:
         raise FileReadError(error)
 
-class LogReader(object):
+
+class LogReader:
     # NOTE be sure to carry along changes in src/symboltable.c for
     # native symbol resolution if something changes in this function
     def __init__(self, fileobj, state):
@@ -105,7 +118,7 @@ class LogReader(object):
     def detect_file_sizes(self):
         self.fileobj.seek(0, os.SEEK_SET)
         firstbytes = self.read(8)
-        three = '\x03' if not PY3 else 3
+        three = "\x03" if not PY3 else 3
         little = None
         if firstbytes[4] == three:
             little = True
@@ -129,7 +142,7 @@ class LogReader(object):
         if self.addr_size == 4:
             # read further
             self.fileobj.seek(0, os.SEEK_SET)
-            self.read(4*4)
+            self.read(4 * 4)
             windows64 = self.read_word() == 1
             if windows64:
                 self.setup_once(little_endian=little, word_size=4, addr_size=8)
@@ -144,9 +157,9 @@ class LogReader(object):
 
     def read_static_header(self):
         r = self.read_word()
-        assert r == 0 # header count
+        assert r == 0  # header count
         r = self.read_word()
-        assert r == 3 # header size
+        assert r == 3  # header size
         r = self.read_word()
         assert r == 0
         self.state.period = self.read_word()
@@ -156,7 +169,7 @@ class LogReader(object):
     def read_header(self):
         s = self.state
         fileobj = self.fileobj
-        s.version, = struct.unpack("!h", fileobj.read(2))
+        (s.version,) = struct.unpack("!h", fileobj.read(2))
 
         if s.version >= VERSION_MODE_AWARE:
             mode = ord(fileobj.read(1))
@@ -170,24 +183,24 @@ class LogReader(object):
 
         lgt = ord(fileobj.read(1))
         s.interp_name = fileobj.read(lgt)
-        if s.interp_name == b'pypy':
+        if s.interp_name == b"pypy":
             s.profile_rpython = True
         if PY3:
             s.interp_name = s.interp_name.decode()
 
     def read_addr(self):
         if self.addr_size == 8:
-            return struct.unpack('<q', self.fileobj.read(8))[0]
+            return struct.unpack("<q", self.fileobj.read(8))[0]
         elif self.addr_size == 4:
-            return struct.unpack('<l', self.fileobj.read(4))[0]
+            return struct.unpack("<l", self.fileobj.read(4))[0]
         else:
             raise NotImplementedError("did not implement size %d" % self.size)
 
     def read_word(self):
         if self.word_size == 8:
-            return struct.unpack('<q', self.fileobj.read(8))[0]
+            return struct.unpack("<q", self.fileobj.read(8))[0]
         elif self.word_size == 4:
-            return struct.unpack('<l', self.fileobj.read(4))[0]
+            return struct.unpack("<l", self.fileobj.read(4))[0]
         else:
             raise NotImplementedError("did not implement size %d" % self.size)
 
@@ -198,7 +211,7 @@ class LogReader(object):
         cnt = self.read_word()
         bytes = self.read(cnt)
         if PY3:
-            return bytes.decode('utf-8')
+            return bytes.decode("utf-8")
         return bytes
 
     def read_trace(self, depth):
@@ -207,13 +220,15 @@ class LogReader(object):
             depth = depth // 2
             kinds_and_pcs = self.read_addresses(depth * 2)
             # kinds_and_pcs is a list of [kind1, pc1, kind2, pc2, ...]
-            return [wrap_kind(kinds_and_pcs[i], kinds_and_pcs[i+1])
-                    for i in xrange(0, len(kinds_and_pcs), 2)]
+            return [
+                wrap_kind(kinds_and_pcs[i], kinds_and_pcs[i + 1])
+                for i in range(0, len(kinds_and_pcs), 2)
+            ]
         else:
             trace = self.read_addresses(depth)
 
             if self.state.profile_lines:
-                for i in xrange(0, len(trace), 2):
+                for i in range(0, len(trace), 2):
                     # In the line profiling mode even items in the trace are line numbers.
                     # Every line number corresponds to the following frame, represented by an address.
                     trace[i] = -trace[i]
@@ -230,11 +245,12 @@ class LogReader(object):
         return addrs
 
     def read_s64(self):
-        return struct.unpack('q', self.fileobj.read(8))[0]
+        return struct.unpack("q", self.fileobj.read(8))[0]
 
     def read_time_and_zone(self):
         return datetime.datetime.fromtimestamp(
-            self.read_timeval()/10.0**6, self.read_timezone())
+            self.read_timeval() / 10.0**6, self.read_timezone()
+        )
 
     def read_timeval(self):
         tv_sec = self.read_s64()
@@ -242,7 +258,7 @@ class LogReader(object):
         return tv_sec * 10**6 + tv_usec
 
     def read_timezone(self):
-        timezone = self.read(8).strip(b'\x00')
+        timezone = self.read(8).strip(b"\x00")
         # we should use pytz and parse iso8601 if we really support time zones
         return None
 
@@ -261,7 +277,7 @@ class LogReader(object):
             elif marker == MARKER_META:
                 key = self.read_string()
                 value = self.read_string()
-                assert not key in s.meta, "key duplication, %s already present" % (key,)
+                assert not key in s.meta, f"key duplication, {key} already present"
                 s.meta[key] = value
             elif marker == MARKER_TIME_N_ZONE:
                 s.start_time = self.read_time_and_zone()
@@ -270,7 +286,7 @@ class LogReader(object):
                 # for now
                 assert count == 1
                 depth = self.read_word()
-                assert depth <= 2**16, 'stack strace depth too high'
+                assert depth <= 2**16, "stack strace depth too high"
                 trace = self.read_trace(depth)
                 thread_id = 0
                 mem_in_kb = 0
@@ -285,7 +301,7 @@ class LogReader(object):
                 name = self.read_string()
                 self.add_virtual_ip(marker, unique_id, name)
             elif marker == MARKER_TRAILER:
-                #if not virtual_ips_only:
+                # if not virtual_ips_only:
                 #    symmap = read_ranges(fileobj.read())
                 if s.version >= VERSION_DURATION:
                     s.end_time = self.read_time_and_zone()
@@ -297,7 +313,7 @@ class LogReader(object):
         self.finished_reading_profile()
 
     def finished_reading_profile(self):
-        self.state.virtual_ips.sort() # I think it's sorted, but who knows
+        self.state.virtual_ips.sort()  # I think it's sorted, but who knows
 
     def add_virtual_ip(self, marker, unique_id, name):
         self.state.virtual_ips.append((unique_id, name))
@@ -305,18 +321,21 @@ class LogReader(object):
     def add_trace(self, trace, trace_count, thread_id, mem_in_kb):
         self.state.profiles.append((trace, trace_count, thread_id, mem_in_kb))
 
+
 class LogReaderDumpNative(LogReader):
     def setup(self):
         self.dedup = set()
 
     def finished_reading_profile(self):
         import _vmprof
-        if not hasattr(_vmprof, 'resolve_addr'):
+
+        if not hasattr(_vmprof, "resolve_addr"):
             # windows does not implement that!
             return
 
         resolve_addr = _vmprof.resolve_addr
         from _vmprof import resolve_addr
+
         LogReader.finished_reading_profile(self)
         if len(self.dedup) == 0:
             return
@@ -337,22 +356,24 @@ class LogReaderDumpNative(LogReader):
             if not srcfile:
                 srcfile = "-"
             string = "n:%s:%d:%s" % (name, lineno, srcfile)
-            bytestring = string.encode('utf-8')
+            bytestring = string.encode("utf-8")
             bytelist.append(struct.pack("P", addr))
             bytelist.append(struct.pack("l", len(bytestring)))
             bytelist.append(bytestring)
             self.fileobj.write(b"".join(bytelist))
 
     def add_virtual_ip(self, marker, unique_id, name):
-        pass # do nothing, no need to save this data
+        pass  # do nothing, no need to save this data
 
     def add_trace(self, trace, trace_count, thread_id, mem_in_kb):
         for addr in trace:
             if addr not in self.dedup:
                 self.dedup.add(addr)
 
-class ReaderState(object):
+
+class ReaderState:
     pass
+
 
 class LogReaderState(ReaderState):
     def __init__(self):
@@ -368,6 +389,7 @@ class LogReaderState(ReaderState):
         self.little_endian = True
         self.period = 0
 
+
 def _read_prof(fileobj, virtual_ips_only=False):
     fileobj = gunzip(fileobj)
 
@@ -379,11 +401,13 @@ def _read_prof(fileobj, virtual_ips_only=False):
         return state.virtual_ips
     return state
 
-class FdWrapper(object):
-    """ This wrapper behaves like a file object. Could not find
-        an stdlib API function that creates such an object without
-        closing it.
+
+class FdWrapper:
+    """This wrapper behaves like a file object. Could not find
+    an stdlib API function that creates such an object without
+    closing it.
     """
+
     def __init__(self, fd):
         self.fd = fd
 

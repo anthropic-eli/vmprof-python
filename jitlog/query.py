@@ -1,8 +1,4 @@
-import functools
-
-
-
-class Filter(object):
+class Filter:
     def __and__(self, o):
         assert isinstance(o, Filter)
         return AndFilter(self, o)
@@ -14,14 +10,17 @@ class Filter(object):
     def _filter(self, trace):
         return True
 
+
 class BinaryFilter(Filter):
     def __init__(self, left, right):
         self.left = left
         self.right = right
 
+
 class AndFilter(BinaryFilter):
     def _filter(self, trace):
         return self.left._filter(trace) and self.right._filter(trace)
+
 
 class OrFilter(BinaryFilter):
     def _filter(self, trace):
@@ -30,6 +29,7 @@ class OrFilter(BinaryFilter):
         if self.right._filter(trace):
             return True
         return False
+
 
 class OpFilter(Filter):
     def __init__(self, name):
@@ -43,13 +43,14 @@ class OpFilter(Filter):
                     return True
         return False
 
+
 class FuncFilter(Filter):
     def __init__(self, name):
         self.name = name
 
     def _filter(self, trace):
         name = self.name
-        stage = trace.get_stage('noopt')
+        stage = trace.get_stage("noopt")
         if not stage:
             return False
 
@@ -59,13 +60,16 @@ class FuncFilter(Filter):
 
         return False
 
+
 class LoopFilter(Filter):
     def _filter(self, trace):
-        return trace.type == 'loop'
+        return trace.type == "loop"
+
 
 class BridgeFilter(Filter):
     def _filter(self, trace):
-        return trace.type == 'bridge'
+        return trace.type == "bridge"
+
 
 loops = LoopFilter()
 
@@ -74,15 +78,15 @@ bridges = BridgeFilter()
 
 QUERY_API = {
     # functions
-    'op': OpFilter,
-    'func': FuncFilter,
+    "op": OpFilter,
+    "func": FuncFilter,
     # variable filters without state
-    'loops': loops,
-    'bridges': bridges,
+    "loops": loops,
+    "bridges": bridges,
 }
 
 
-class Query(object):
+class Query:
     def __init__(self, text):
         self.query_str = text
         self.forest = None
@@ -92,11 +96,11 @@ class Query(object):
         return self.evaluate(forest, self.query_str)
 
     def evaluate(self, forest, qstr):
-        if qstr is None or qstr.strip() == '':
+        if qstr is None or qstr.strip() == "":
             return None
 
         api = {}
-        for k,f in QUERY_API.items():
+        for k, f in QUERY_API.items():
             api[k] = f
         # ---------------------------------------------
         # SECURITY ISSUE:
@@ -105,7 +109,6 @@ class Query(object):
         f = eval(qstr, {}, api)
         return [t for t in forest.traces.values() if f._filter(t)]
 
+
 def new_unsafe_query(query):
     return Query(query)
-
-

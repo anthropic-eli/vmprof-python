@@ -1,16 +1,18 @@
-import sys
 import struct
+import sys
 import traceback
+from collections import defaultdict
+from io import BytesIO
+
 from jitlog import constants as const, marks
 from jitlog.objects import TraceForest
 from vmshare.binary import read_string
-from io import BytesIO
-from collections import defaultdict
 
 JITLOG_MIN_VERSION = 1
 JITLOG_VERSION = 1
 
-class ParseContext(object):
+
+class ParseContext:
     def __init__(self, forest):
         self.descrs = defaultdict(list)
         self.forest = forest
@@ -19,18 +21,20 @@ class ParseContext(object):
     def read_le_addr(self, fileobj):
         b = fileobj.read(self.word_size)
         if self.word_size == 4:
-            res = int(struct.unpack('I', b)[0])
+            res = int(struct.unpack("I", b)[0])
         else:
-            res = int(struct.unpack('Q', b)[0])
+            res = int(struct.unpack("Q", b)[0])
         return res
 
 
 class ParseException(Exception):
     pass
 
+
 def read_jitlog_data(filename):
-    with open(str(filename), 'rb') as fileobj:
+    with open(str(filename), "rb") as fileobj:
         return fileobj.read()
+
 
 def parse_jitlog(filename, data=None):
     if data is None:
@@ -40,8 +44,9 @@ def parse_jitlog(filename, data=None):
     f.filepath = filename
     return f
 
+
 def _parse_jitlog(fileobj):
-    """ JitLog is parsed. if an exception is raised after
+    """JitLog is parsed. if an exception is raised after
     the header has been read, it is saved in the field 'exc' on
     the forest returned.
 
@@ -67,10 +72,9 @@ def _parse_jitlog(fileobj):
     while True:
         marker = fileobj.read(1)
         if len(marker) == 0:
-            break # end of file!
+            break  # end of file!
         if not forest.is_jitlog_marker(marker):
-            msg = "marker unknown: 0x%x at pos 0x%x" % \
-                      (ord(marker), fileobj.tell())
+            msg = f"marker unknown: 0x{ord(marker):x} at pos 0x{fileobj.tell():x}"
             forest.exc = ParseException(msg)
             break
         trace = forest.last_trace
@@ -87,10 +91,13 @@ def _parse_jitlog(fileobj):
         except Exception as e:
             exc_type, exc_value, exc_traceback = sys.exc_info()
             tb = traceback.extract_tb(exc_traceback, limit=3)
-            msg = "failed at 0x%x with marker %s with exc \"%s\". trace back: \"%s\"" %\
-                    (fileobj.tell(), marker, str(e), tb)
+            msg = 'failed at 0x{:x} with marker {} with exc "{}". trace back: "{}"'.format(
+                fileobj.tell(),
+                marker,
+                str(e),
+                tb,
+            )
             forest.exc = ParseException(msg)
             break
 
     return forest
-

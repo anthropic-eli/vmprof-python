@@ -1,14 +1,15 @@
-import vmprof
 import tempfile
 
-from vmprof.stats import Stats
+import vmprof
 from vmprof.reader import _read_prof
+from vmprof.stats import Stats
 
 
 class VMProfError(Exception):
     pass
 
-class ProfilerContext(object):
+
+class ProfilerContext:
     done = False
 
     def __init__(self, name, period, memory, native, real_time):
@@ -23,19 +24,24 @@ class ProfilerContext(object):
         self.real_time = real_time
 
     def __enter__(self):
-        vmprof.enable(self.tmpfile.fileno(), self.period, self.memory,
-                      native=self.native, real_time=self.real_time)
+        vmprof.enable(
+            self.tmpfile.fileno(),
+            self.period,
+            self.memory,
+            native=self.native,
+            real_time=self.real_time,
+        )
 
     def __exit__(self, type, value, traceback):
         vmprof.disable()
-        self.tmpfile.close() # flushes the stream
+        self.tmpfile.close()  # flushes the stream
         self.done = True
 
 
 def read_profile(prof_file):
     file_to_close = None
-    if not hasattr(prof_file, 'read'):
-        prof_file = file_to_close = open(str(prof_file), 'rb')
+    if not hasattr(prof_file, "read"):
+        prof_file = file_to_close = open(str(prof_file), "rb")
 
     state = _read_prof(prof_file)
 
@@ -44,19 +50,28 @@ def read_profile(prof_file):
 
     jit_frames = {}
     d = dict(state.virtual_ips)
-    s = Stats(state.profiles, d, jit_frames, interp=state.interp_name,
-              start_time=state.start_time, end_time=state.end_time,
-              meta=state.meta, state=state)
+    s = Stats(
+        state.profiles,
+        d,
+        jit_frames,
+        interp=state.interp_name,
+        start_time=state.start_time,
+        end_time=state.end_time,
+        meta=state.meta,
+        state=state,
+    )
     return s
 
 
-class Profiler(object):
+class Profiler:
     ctx = None
 
     def __init__(self):
         self._lib_cache = {}
 
-    def measure(self, name=None, period=0.001, memory=False, native=False, real_time=False):
+    def measure(
+        self, name=None, period=0.001, memory=False, native=False, real_time=False
+    ):
         self.ctx = ProfilerContext(name, period, memory, native, real_time)
         return self.ctx
 
@@ -68,4 +83,3 @@ class Profiler(object):
         res = read_profile(self.ctx.tmpfile.name)
         self.ctx = None
         return res
-

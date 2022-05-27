@@ -1,18 +1,18 @@
-import py
-import os
 import sys
-import pytest
-from cffi import FFI
-from array import array
 
-if sys.platform != 'win32':
+import py
+from cffi import FFI
+
+if sys.platform != "win32":
 
     ffi = FFI()
-    ffi.cdef("""
+    ffi.cdef(
+        """
     //void dump_all_known_symbols(int fd);
     int test_extract(char ** name, int * lineno, char ** src);
     int test_extract_sofile(char ** name, int * lineno, char ** src);
-    """)
+    """
+    )
     with open("src/symboltable.c", "rb") as fd:
         source = fd.read().decode()
     source += """
@@ -38,38 +38,46 @@ if sys.platform != 'win32':
                                 lineno, gsrc, 128);
     }
     """
-    libs = [] #['unwind', 'unwind-x86_64']
-    includes = ['src']
-    if sys.platform.startswith('linux'):
-        for src in ["src/libbacktrace/state.c",
-                    "src/libbacktrace/backtrace.c",
-                    "src/libbacktrace/fileline.c",
-                    "src/libbacktrace/posix.c",
-                    "src/libbacktrace/mmap.c",
-                    "src/libbacktrace/mmapio.c",
-                    "src/libbacktrace/elf.c",
-                    "src/libbacktrace/dwarf.c",
-                    "src/libbacktrace/sort.c",
-                   ]:
+    libs = []  # ['unwind', 'unwind-x86_64']
+    includes = ["src"]
+    if sys.platform.startswith("linux"):
+        for src in [
+            "src/libbacktrace/state.c",
+            "src/libbacktrace/backtrace.c",
+            "src/libbacktrace/fileline.c",
+            "src/libbacktrace/posix.c",
+            "src/libbacktrace/mmap.c",
+            "src/libbacktrace/mmapio.c",
+            "src/libbacktrace/elf.c",
+            "src/libbacktrace/dwarf.c",
+            "src/libbacktrace/sort.c",
+        ]:
             with open(src, "rb") as fd:
                 source += fd.read().decode()
-        includes.append('src/libbacktrace')
+        includes.append("src/libbacktrace")
 
     extra_compile = []
     if sys.platform.startswith("linux"):
-        extra_compile = ['-DVMPROF_LINUX', '-DVMPROF_UNIX', '-Werror', '-g']
+        extra_compile = ["-DVMPROF_LINUX", "-DVMPROF_UNIX", "-Werror", "-g"]
 
     # trick: compile with _CFFI_USE_EMBEDDING=1 which will not define Py_LIMITED_API
-    ffi.set_source("vmprof.test._test_symboltable", source, include_dirs=includes,
-                         define_macros=[('_CFFI_USE_EMBEDDING',1),('_PY_TEST',1)], libraries=libs,
-                         extra_compile_args=extra_compile)
+    ffi.set_source(
+        "vmprof.test._test_symboltable",
+        source,
+        include_dirs=includes,
+        define_macros=[("_CFFI_USE_EMBEDDING", 1), ("_PY_TEST", 1)],
+        libraries=libs,
+        extra_compile_args=extra_compile,
+    )
 
     ffi.compile(verbose=True)
 
+
 @py.test.mark.skipif("sys.platform == 'win32'")
-class TestSymbolTable(object):
+class TestSymbolTable:
     def setup_class(cls):
         from vmprof.test import _test_symboltable as clib
+
         cls.lib = clib.lib
         cls.ffi = clib.ffi
 
@@ -84,7 +92,7 @@ class TestSymbolTable(object):
         assert ffi.string(name[0]) == b"vmp_resolve_addr"
         assert ffi.string(src[0]).endswith(b"vmprof/test/_test_symboltable.c")
         # lines are not included in stab
-        if sys.platform.startswith('linux'):
+        if sys.platform.startswith("linux"):
             with open("vmprof/test/_test_symboltable.c", "rb") as fd:
                 lineno = 1
                 for line in fd.readlines():

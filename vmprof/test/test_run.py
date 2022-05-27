@@ -1,34 +1,39 @@
 """ Test the actual run
 """
+import gzip
 import os
-import py
 import sys
 import tempfile
 import time
-import gzip
-import time
-import pytz
-import vmprof
-import six
-import pytest
-from cffi import FFI
 from datetime import datetime
-import requests
-from vmshare.service import Service, ServiceException
-from vmprof.show import PrettyPrinter
+
+import py
+from cffi import FFI
+
+import vmprof
 from vmprof.profiler import read_profile
-from vmprof.reader import (gunzip, MARKER_STACKTRACE, MARKER_VIRTUAL_IP,
-        MARKER_TRAILER, FileReadError, VERSION_THREAD_ID,
-        MARKER_TIME_N_ZONE, assert_error,
-        MARKER_META, MARKER_NATIVE_SYMBOLS)
-from vmshare.binary import read_string, read_word, read_addr
-from vmprof.stats import Stats
+from vmprof.reader import (
+    MARKER_META,
+    MARKER_NATIVE_SYMBOLS,
+    MARKER_STACKTRACE,
+    MARKER_TIME_N_ZONE,
+    MARKER_TRAILER,
+    MARKER_VIRTUAL_IP,
+    VERSION_THREAD_ID,
+    FileReadError,
+    assert_error,
+    gunzip,
+)
+from vmprof.show import PrettyPrinter
+from vmshare.binary import read_addr, read_string, read_word
+
 
 class BufferTooSmallError(Exception):
     def get_buf(self):
         return b"".join(self.args[0])
 
-class FileObjWrapper(object):
+
+class FileObjWrapper:
     def __init__(self, fileobj, buffer_so_far=None):
         self._fileobj = fileobj
         self._buf = []
@@ -38,11 +43,11 @@ class FileObjWrapper(object):
     def read(self, count):
         if self._buffer_so_far is not None:
             if self._buffer_pos + count >= len(self._buffer_so_far):
-                s = self._buffer_so_far[self._buffer_pos:]
+                s = self._buffer_so_far[self._buffer_pos :]
                 s += self._fileobj.read(count - len(s))
                 self._buffer_so_far = None
             else:
-                s = self._buffer_so_far[self._buffer_pos:self._buffer_pos + count]
+                s = self._buffer_so_far[self._buffer_pos : self._buffer_pos + count]
                 self._buffer_pos += count
         else:
             s = self._fileobj.read(count)
@@ -57,26 +62,29 @@ if sys.version_info.major == 3:
     PY3K = True
 else:
     PY3K = False
-if hasattr(os, 'uname') and os.uname().machine == 'ppc64le':
+if hasattr(os, "uname") and os.uname().machine == "ppc64le":
     PPC64LE = True
 else:
     PPC64LE = False
 
-if '__pypy__' in sys.builtin_module_names:
+if "__pypy__" in sys.builtin_module_names:
     COUNT = 100000
 else:
     COUNT = 10000
+
 
 def function_foo():
     for k in range(1000):
         l = [a for a in xrange(COUNT)]
     return l
 
+
 def function_bar():
     import time
+
     for k in range(1000):
         time.sleep(0.001)
-    return 1+1
+    return 1 + 1
 
 
 def function_bar():
@@ -84,13 +92,13 @@ def function_bar():
 
 
 def functime_foo(t=0.05, insert=False):
-    if (insert):
+    if insert:
         vmprof.insert_real_time_thread()
     sleep_retry_eintr(t)
 
 
 def functime_bar(t=0.05, remove=False):
-    if (remove):
+    if remove:
         vmprof.remove_real_time_thread()
     sleep_retry_eintr(t)
 
@@ -104,17 +112,26 @@ def sleep_retry_eintr(t):
         remaining = t - elapsed
 
 
-foo_full_name = "py:function_foo:%d:%s" % (function_foo.__code__.co_firstlineno,
-                                           function_foo.__code__.co_filename)
-bar_full_name = "py:function_bar:%d:%s" % (function_bar.__code__.co_firstlineno,
-                                           function_bar.__code__.co_filename)
+foo_full_name = "py:function_foo:%d:%s" % (
+    function_foo.__code__.co_firstlineno,
+    function_foo.__code__.co_filename,
+)
+bar_full_name = "py:function_bar:%d:%s" % (
+    function_bar.__code__.co_firstlineno,
+    function_bar.__code__.co_filename,
+)
 
-foo_time_name = "py:functime_foo:%d:%s" % (functime_foo.__code__.co_firstlineno,
-                                           functime_foo.__code__.co_filename)
-bar_time_name = "py:functime_bar:%d:%s" % (functime_bar.__code__.co_firstlineno,
-                                           functime_bar.__code__.co_filename)
+foo_time_name = "py:functime_foo:%d:%s" % (
+    functime_foo.__code__.co_firstlineno,
+    functime_foo.__code__.co_filename,
+)
+bar_time_name = "py:functime_bar:%d:%s" % (
+    functime_bar.__code__.co_firstlineno,
+    functime_bar.__code__.co_filename,
+)
 
 GZIP = False
+
 
 def test_basic():
     tmpfile = tempfile.NamedTemporaryFile(delete=False)
@@ -125,9 +142,10 @@ def test_basic():
     if GZIP:
         assert b"function_foo" in gzip.GzipFile(tmpfile.name).read()
     else:
-        with open(tmpfile.name, 'rb') as file:
+        with open(tmpfile.name, "rb") as file:
             content = file.read()
             assert b"function_foo" in content
+
 
 def test_read_bit_by_bit():
     tmpfile = tempfile.NamedTemporaryFile(delete=False)
@@ -138,6 +156,7 @@ def test_read_bit_by_bit():
     stats = read_profile(tmpfile.name)
     stats.get_tree()
 
+
 def test_enable_disable():
     prof = vmprof.Profiler()
     with prof.measure():
@@ -146,13 +165,15 @@ def test_enable_disable():
     d = dict(stats.top_profile())
     assert d[foo_full_name] > 0
 
+
 def test_start_end_time():
     prof = vmprof.Profiler()
     before_profile = datetime.now()
-    if sys.platform == 'win32':
+    if sys.platform == "win32":
         # it seems that the windows implementation of vmp_write_time_now
         # is borken, and cuts of some micro second precision.
         import time
+
         time.sleep(1)
     with prof.measure():
         function_foo()
@@ -165,6 +186,7 @@ def test_start_end_time():
     assert e <= after_profile and s <= after_profile
     assert before_profile <= after_profile
     assert before_profile <= e
+
 
 def test_nested_call():
     prof = vmprof.Profiler()
@@ -184,27 +206,29 @@ def test_nested_call():
             break
     names = [stats._get_name(i[0]) for i in stats.function_profile(bar_adr)[0]]
 
-    if '__pypy__' in sys.builtin_module_names:
+    if "__pypy__" in sys.builtin_module_names:
         names.sort()
-        assert len([x for x in names if str(x).startswith('jit:')]) > 0
+        assert len([x for x in names if str(x).startswith("jit:")]) > 0
         assert len([x for x in names if x == foo_full_name]) == 1
     else:
         assert foo_full_name in names
     t = stats.get_tree()
-    while 'function_bar' not in t.name:
-        t = t['']
+    while "function_bar" not in t.name:
+        t = t[""]
     assert len(t.children) == 1
-    assert 'function_foo' in t[''].name
+    assert "function_foo" in t[""].name
     if PY3K:
-        assert len(t[''].children) == 1
-        assert '<listcomp>' in t[''][''].name
+        assert len(t[""].children) == 1
+        assert "<listcomp>" in t[""][""].name
     else:
-        assert len(t[''].children) == 0
+        assert len(t[""].children) == 0
+
 
 def test_multithreaded():
-    if '__pypy__' in sys.builtin_module_names:
+    if "__pypy__" in sys.builtin_module_names:
         py.test.skip("not supported on pypy just yet")
     import threading
+
     finished = []
 
     def f():
@@ -222,27 +246,29 @@ def test_multithreaded():
             t.join()
 
     stats = prof.get_stats()
-    all_ids = set([x[2] for x in stats.profiles])
-    if sys.platform == 'darwin':
+    all_ids = {x[2] for x in stats.profiles}
+    if sys.platform == "darwin":
         # on travis CI, these mac builds sometimes fail because of scheduling
         # issues. Having only 1 thread id is legit, which means that
         # only one thread has been interrupted. (Usually 2 are at least in this list)
         assert len(all_ids) >= 1
     else:
-        assert len(all_ids) in (3, 4) # maybe 0
+        assert len(all_ids) in (3, 4)  # maybe 0
 
-    #cur_id = list(all_ids)[0]
-    #lgt1 = len([x[2] for x in stats.profiles if x[2] == cur_id])
-    #total = len(stats.profiles)
+    # cur_id = list(all_ids)[0]
+    # lgt1 = len([x[2] for x in stats.profiles if x[2] == cur_id])
+    # total = len(stats.profiles)
     # between 33-10% and 33+10% is within one profile
     # this is too close of a call - thread scheduling can leave us
     # unlucky, especially on badly behaved systems
     # assert (0.23 * total) <= lgt1 <= (0.43 * total)
     assert len(finished) == 3
 
+
 def test_memory_measurment():
-    if not sys.platform.startswith('linux') or '__pypy__' in sys.builtin_module_names:
+    if not sys.platform.startswith("linux") or "__pypy__" in sys.builtin_module_names:
         py.test.skip("unsupported platform")
+
     def function_foo():
         all = []
         for k in range(1000):
@@ -251,6 +277,7 @@ def test_memory_measurment():
 
     def function_bar():
         return function_foo()
+
     prof = vmprof.Profiler()
     with prof.measure(memory=True):
         function_bar()
@@ -271,14 +298,18 @@ def test_vmprof_real_time():
 
 @py.test.mark.skipif("'__pypy__' in sys.builtin_module_names")
 @py.test.mark.skipif("sys.platform == 'win32'")
-@py.test.mark.parametrize("insert_foo,remove_bar", [
-    (False, False),
-    (False,  True),
-    ( True, False),
-    ( True,  True),
-])
+@py.test.mark.parametrize(
+    "insert_foo,remove_bar",
+    [
+        (False, False),
+        (False, True),
+        (True, False),
+        (True, True),
+    ],
+)
 def test_vmprof_real_time_threaded(insert_foo, remove_bar):
     import threading
+
     prof = vmprof.Profiler()
     wait = 0.5
     thread = threading.Thread(target=functime_foo, args=[wait, insert_foo])
@@ -295,14 +326,18 @@ def test_vmprof_real_time_threaded(insert_foo, remove_bar):
 
 @py.test.mark.skipif("'__pypy__' in sys.builtin_module_names")
 @py.test.mark.skipif("sys.platform == 'win32'")
-@py.test.mark.parametrize("insert_foo,remove_bar", [
-    (False, False),
-    (False,  True),
-    ( True, False),
-    ( True,  True),
-])
+@py.test.mark.parametrize(
+    "insert_foo,remove_bar",
+    [
+        (False, False),
+        (False, True),
+        (True, False),
+        (True, True),
+    ],
+)
 def test_insert_other_real_time_thread(insert_foo, remove_bar):
     import threading
+
     prof = vmprof.Profiler()
     wait = 0.5
     # This test is the same as above, except that we manually add/remove
@@ -327,6 +362,7 @@ def test_insert_other_real_time_thread(insert_foo, remove_bar):
 @py.test.mark.skipif("sys.platform == 'win32'")
 def test_vmprof_real_time_many_threads():
     import threading
+
     prof = vmprof.Profiler()
     wait = 0.5
 
@@ -351,6 +387,7 @@ def test_vmprof_real_time_many_threads():
 
 
 if GZIP:
+
     def test_gzip_problem():
         tmpfile = tempfile.NamedTemporaryFile(delete=False)
         vmprof.enable(tmpfile.fileno())
@@ -363,6 +400,7 @@ if GZIP:
             vmprof.disable()
             assert "Error while writing profile" in str(exc_info)
         tmpfile.close()
+
 
 def read_prof_bit_by_bit(fileobj):
     fileobj = gunzip(fileobj)
@@ -385,6 +423,7 @@ def read_prof_bit_by_bit(fileobj):
             buf = e.get_buf()
     return status.period, status.profiles, status.virtual_ips, status.interp_name
 
+
 def read_one_marker(fileobj, status, buffer_so_far=None):
     fileobj = FileObjWrapper(fileobj, buffer_so_far)
     marker = fileobj.read(1)
@@ -393,7 +432,7 @@ def read_one_marker(fileobj, status, buffer_so_far=None):
         # for now
         assert count == 1
         depth = read_word(fileobj)
-        assert depth <= 2**16, 'stack strace depth too high'
+        assert depth <= 2**16, "stack strace depth too high"
         trace = read_trace(fileobj, depth, status.version, status.profile_lines)
 
         if status.version >= VERSION_THREAD_ID:
@@ -417,12 +456,13 @@ def read_one_marker(fileobj, status, buffer_so_far=None):
         read_string(fileobj)
         # TODO save the for the tests?
     elif marker == MARKER_TRAILER:
-        return True # finished
+        return True  # finished
     elif marker == MARKER_TIME_N_ZONE:
         read_time_and_zone(fileobj)
     else:
         raise FileReadError("unexpected marker: %d" % ord(marker))
     return False
+
 
 def read_header(fileobj, buffer_so_far=None):
     fileobj = FileObjWrapper(fileobj, buffer_so_far)
@@ -432,8 +472,9 @@ def read_header(fileobj, buffer_so_far=None):
     period = read_word(fileobj)
     assert_error(read_word(fileobj) == 0)
     interp_name, version, profile_memory, profile_lines = _read_header(fileobj)
-    return ReaderStatus(interp_name, period, version, None, profile_memory,
-                        profile_lines)
+    return ReaderStatus(
+        interp_name, period, version, None, profile_memory, profile_lines
+    )
 
 
 def test_line_profiling():
@@ -446,11 +487,12 @@ def test_line_profiling():
     def walk(tree):
         assert len(tree.lines) >= len(tree.children)
 
-        for v in six.itervalues(tree.children):
-                walk(v)
+        for v in tree.children.values():
+            walk(v)
 
     stats = read_profile(tmpfile.name)
     walk(stats.get_tree())
+
 
 def test_vmprof_show():
     tmpfile = tempfile.NamedTemporaryFile(delete=False)
@@ -462,13 +504,16 @@ def test_vmprof_show():
     pp = PrettyPrinter()
     pp.show(tmpfile.name)
 
+
 @py.test.mark.skipif("sys.platform == 'win32'")
-class TestNative(object):
+class TestNative:
     def setup_class(cls):
         ffi = FFI()
-        ffi.cdef("""
+        ffi.cdef(
+            """
         void native_gzipgzipgzip(void);
-        """)
+        """
+        )
         source = """
         #include "zlib.h"
         unsigned char input[100];
@@ -493,15 +538,21 @@ class TestNative(object):
         }
         """
         libs = []
-        if sys.platform.startswith('linux'):
-            libs.append('z')
+        if sys.platform.startswith("linux"):
+            libs.append("z")
         # trick: compile with _CFFI_USE_EMBEDDING=1 which will not define Py_LIMITED_API
-        ffi.set_source("vmprof.test._test_native_gzip", source, include_dirs=['src'],
-                       define_macros=[('_CFFI_USE_EMBEDDING',1),('_PY_TEST',1)], libraries=libs,
-                       extra_compile_args=['-Werror', '-g', '-O0'])
+        ffi.set_source(
+            "vmprof.test._test_native_gzip",
+            source,
+            include_dirs=["src"],
+            define_macros=[("_CFFI_USE_EMBEDDING", 1), ("_PY_TEST", 1)],
+            libraries=libs,
+            extra_compile_args=["-Werror", "-g", "-O0"],
+        )
 
         ffi.compile(verbose=True)
         from vmprof.test import _test_native_gzip as clib
+
         cls.lib = clib.lib
         cls.ffi = clib.ffi
 
@@ -510,22 +561,23 @@ class TestNative(object):
         p = vmprof.Profiler()
         with p.measure(native=True):
             for i in range(1000):
-                self.lib.native_gzipgzipgzip();
+                self.lib.native_gzipgzipgzip()
         stats = p.get_stats()
         top = stats.get_top(stats.profiles)
         pp = PrettyPrinter()
         pp._print_tree(stats.get_tree())
+
         def walk(parent):
             if parent is None or len(parent.children) == 0:
                 return False
 
-            if 'n:native_gzipgzipgzip:' in parent.name:
+            if "n:native_gzipgzipgzip:" in parent.name:
                 return True
 
             for child in parent.children.values():
-                if 'n:native_gzipgzipgzip:' in child.name:
+                if "n:native_gzipgzipgzip:" in child.name:
                     p = float(child.count) / parent.count
-                    assert p >= 0.3 # usually bigger than 0.4
+                    assert p >= 0.3  # usually bigger than 0.4
                     return True
                 else:
                     found = walk(child)
@@ -548,7 +600,7 @@ class TestNative(object):
         tmpfile = tempfile.NamedTemporaryFile(delete=False)
         vmprof.enable(tmpfile.fileno())
         if not vmprof.get_profile_path() == tmpfile.name:
-            with open(vmprof.get_profile_path(), 'rb') as fd1:
+            with open(vmprof.get_profile_path(), "rb") as fd1:
                 with open(tmpfile.name, "rb") as fd2:
                     assert fd1.read() == fd2.read()
         vmprof.disable()
@@ -564,5 +616,6 @@ class TestNative(object):
         print(ts)
         assert 2500000 <= micros <= 3000000
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     test_line_profiling()

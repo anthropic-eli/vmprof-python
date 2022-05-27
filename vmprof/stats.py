@@ -1,12 +1,22 @@
-import six
 from vmprof.reader import AssemblerCode, JittedCode, NativeCode
+
 
 class EmptyProfileFile(Exception):
     pass
 
-class Stats(object):
-    def __init__(self, profiles, adr_dict=None, jit_frames=None, interp=None,
-                 meta=None, start_time=None, end_time=None, state=None):
+
+class Stats:
+    def __init__(
+        self,
+        profiles,
+        adr_dict=None,
+        jit_frames=None,
+        interp=None,
+        meta=None,
+        start_time=None,
+        end_time=None,
+        state=None,
+    ):
         self.profiles = profiles
         self.adr_dict = adr_dict
         self.functions = {}
@@ -22,7 +32,7 @@ class Stats(object):
         if jit_frames is None:
             jit_frames = set()
         if interp is None:
-            interp = 'pypy' # why not
+            interp = "pypy"  # why not
         self.interp = interp
         self.jit_frames = jit_frames
         self.meta = meta or {}
@@ -31,7 +41,7 @@ class Stats(object):
 
     def get_runtime_in_microseconds(self):
         if self.start_time is None or self.end_time is None:
-            return 0 # old versions that do not emit start or end time
+            return 0  # old versions that do not emit start or end time
         ts = self.end_time - self.start_time
         return ts.total_seconds() * 1000000
 
@@ -43,7 +53,7 @@ class Stats(object):
 
     def find_addrs_containing_name(self, part):
         for adr, name in self.adr_dict.items():
-            n, symbol, _, _ = name.split(':', 3)
+            n, symbol, _, _ = name.split(":", 3)
             if part in symbol:
                 yield adr
 
@@ -51,14 +61,14 @@ class Stats(object):
         name = self.adr_dict.get(addr, None)
         if not name:
             return None
-        lang, symbol, line, file = name.split(':', 3)
+        lang, symbol, line, file = name.split(":", 3)
         return lang, symbol, line, file
 
     def getargv(self):
-        return self.meta.get('argv', '')
+        return self.meta.get("argv", "")
 
     def getmeta(self, key, default):
-        return self.meta.get(key, default) 
+        return self.meta.get(key, default)
 
     def display(self, no):
         prof = self.profiles[no][0]
@@ -77,16 +87,16 @@ class Stats(object):
                     current_iter[addr] = None
 
     def top_profile(self):
-        return [(self._get_name(k), v) for (k, v) in six.iteritems(self.functions)]
+        return [(self._get_name(k), v) for (k, v) in self.functions.items()]
 
     def _get_name(self, addr):
         if self.adr_dict is not None:
-            return self.adr_dict.get(addr, '<unknown code>')
+            return self.adr_dict.get(addr, "<unknown code>")
 
         return addr
 
     def function_profile(self, top_function):
-        """ Show functions that we call (directly or indirectly) under
+        """Show functions that we call (directly or indirectly) under
         a given addr
         """
         result = {}
@@ -128,7 +138,7 @@ class Stats(object):
             cur = top
             for i in range(0, len(profile[0])):
                 if isinstance(profile[0][i], AssemblerCode):
-                    continue # just ignore it for now
+                    continue  # just ignore it for now
                 addr = profile[0][i]
 
                 if addr <= 0:
@@ -141,9 +151,9 @@ class Stats(object):
                     name = self._get_name(addr)
                     cur = cur.add_child(addr, name)
             if isinstance(addr, JittedCode):
-                cur.meta['jit'] = cur.meta.get('jit', 0) + 1
+                cur.meta["jit"] = cur.meta.get("jit", 0) + 1
             if isinstance(addr, NativeCode):
-                cur.meta['native'] = cur.meta.get('native', 0) + 1
+                cur.meta["native"] = cur.meta.get("native", 0) + 1
         # get the first "interesting" node, that is after vmprof and pypy
         # mess
 
@@ -153,7 +163,10 @@ class Stats(object):
         first_top = top
 
         while True:
-            if top.name.startswith('py:<module>') and 'vmprof/__main__.py' not in top.name:
+            if (
+                top.name.startswith("py:<module>")
+                and "vmprof/__main__.py" not in top.name
+            ):
                 return top
             if len(top.children) > 1:
                 # pick the biggest one in case of branches in vmprof
@@ -166,16 +179,16 @@ class Stats(object):
                 top = next
             else:
                 try:
-                    top = top['']
+                    top = top[""]
                 except KeyError:
                     break
 
         return first_top
 
 
-class Node(object):
-    """ children is a dict of addr -> Node
-    """
+class Node:
+    """children is a dict of addr -> Node"""
+
     _self_count = None
     flat = False
 
@@ -185,7 +198,7 @@ class Node(object):
         self.children = children
         self.name = name
         self.addr = addr
-        self.count = count # starts at 1
+        self.count = count  # starts at 1
         self.jitcodes = {}
         self.meta = {}
         self.lines = {}
@@ -200,10 +213,11 @@ class Node(object):
 
     def as_json(self):
         import json
+
         return json.dumps(self._serialize())
 
     def _serialize(self):
-        chld = [ch._serialize() for ch in six.itervalues(self.children)]
+        chld = [ch._serialize() for ch in self.children.values()]
         # if we don't make str() of addr here, JS does its
         # int -> float -> int losy convertion without
         # any warning
@@ -211,21 +225,21 @@ class Node(object):
 
     def _rec_count(self):
         c = 1
-        for x in six.itervalues(self.children):
+        for x in self.children.values():
             c += x._rec_count()
         return c
 
     def walk(self, callback):
         callback(self)
-        for c in six.itervalues(self.children):
+        for c in self.children.values():
             c.walk(callback)
 
     def cumulative_meta(self, d=None):
         if d is None:
             d = {}
-        for c in six.itervalues(self.children):
+        for c in self.children.values():
             c.cumulative_meta(d)
-        for k, v in six.iteritems(self.meta):
+        for k, v in self.meta.items():
             d[k] = d.get(k, 0) + v
         return d
 
@@ -241,7 +255,7 @@ class Node(object):
         if self._self_count is not None:
             return self._self_count
         self._self_count = self.count
-        for elem in six.itervalues(self.children):
+        for elem in self.children.values():
             self._self_count -= elem.count
         return self._self_count
 
@@ -259,13 +273,17 @@ class Node(object):
     def __eq__(self, other):
         if not isinstance(other, Node):
             return False
-        return self.name == other.name and self.addr == other.addr and self.count == other.count and self.children == other.children
+        return (
+            self.name == other.name
+            and self.addr == other.addr
+            and self.count == other.count
+            and self.children == other.children
+        )
 
     def __ne__(self, other):
         return not self == other
 
     def __repr__(self):
         items = sorted(self.children.items())
-        child_str = ", ".join([("(%d, %s)" % (v.count, v.name))
-                               for k, v in items])
-        return '<Node: %s (%d) [%s]>' % (self.name, self.count, child_str)
+        child_str = ", ".join([("(%d, %s)" % (v.count, v.name)) for k, v in items])
+        return "<Node: %s (%d) [%s]>" % (self.name, self.count, child_str)

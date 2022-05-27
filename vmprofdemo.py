@@ -1,19 +1,19 @@
-import sys
 import random
+import sys
 
 
-class Node(object):
+class Node:
     def __init__(self, right, left):
         self.left = left
         self.right = right
 
 
-class Digit(object):
+class Digit:
     def __init__(self, v):
         self.v = v
 
     def eval(self):
-        return ord(self.v) - ord('0')
+        return ord(self.v) - ord("0")
 
 
 class Plus(Node):
@@ -27,13 +27,13 @@ class Minus(Node):
 
 
 def parse_pn(text):
-    digits = [chr(ord('0') + i) for i in range(10)]
+    digits = [chr(ord("0") + i) for i in range(10)]
 
     stack = []
     for c in text:
-        if c == '+':
+        if c == "+":
             stack.append(Plus(stack.pop(), stack.pop()))
-        elif c == '-':
+        elif c == "-":
             stack.append(Minus(stack.pop(), stack.pop()))
         elif c in digits:
             stack.append(Digit(c))
@@ -65,11 +65,11 @@ def find(expr):
 
 def gen_exp(lgt):
     stack_depth = 0
-    exp = ''
-    DIGITS = [chr(ord('0') + i) for i in range(10)]
+    exp = ""
+    DIGITS = [chr(ord("0") + i) for i in range(10)]
     for i in range(lgt):
         if stack_depth > 1:
-            c = random.choice(DIGITS + ['-', '+'] * 4)
+            c = random.choice(DIGITS + ["-", "+"] * 4)
         else:
             c = random.choice(DIGITS)
         if c in DIGITS:
@@ -78,7 +78,7 @@ def gen_exp(lgt):
             stack_depth -= 1
         exp += c
     while stack_depth > 1:
-        exp += random.choice(['-', '+'])
+        exp += random.choice(["-", "+"])
         stack_depth -= 1
     return exp
 
@@ -89,9 +89,10 @@ def fuzzer(count):
         assert parse_pn(exp).eval() == find(exp)
 
 
-if __name__ == '__main__':
-    if len(sys.argv) == 2 and sys.argv[1] == 'demo':
+if __name__ == "__main__":
+    if len(sys.argv) == 2 and sys.argv[1] == "demo":
         import time
+
         random.seed(42)
         l = []
         for k in range(100):
@@ -99,8 +100,15 @@ if __name__ == '__main__':
             fuzzer(100)
             l.append(time.time() - t0)
             print("%.1f ms" % ((time.time() - t0) * 1000))
-        print("min: %.1fms max: %.1fms avg: %.1fms %.1fms" % (min(l) * 1000, max(l) * 1000,
-                                                              sum(l) / len(l) * 1000, sum(l[30:]) / (len(l) - 30) * 1000))
+        print(
+            "min: %.1fms max: %.1fms avg: %.1fms %.1fms"
+            % (
+                min(l) * 1000,
+                max(l) * 1000,
+                sum(l) / len(l) * 1000,
+                sum(l[30:]) / (len(l) - 30) * 1000,
+            )
+        )
         sys.exit(0)
     if len(sys.argv) > 1:
         count = int(sys.argv[1])

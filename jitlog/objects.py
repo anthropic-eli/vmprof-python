@@ -1,15 +1,17 @@
 import os
-import sys
 import struct
-import argparse
+import sys
 from collections import defaultdict
-from jitlog import constants as const, merge_point
+
+from jitlog import constants as const
 
 PY3 = sys.version_info[0] >= 3
 
-class FlatOp(object):
-    def __init__(self, opnum, opname, args, result,
-                 descr=None, descr_number=None, failargs=None):
+
+class FlatOp:
+    def __init__(
+        self, opnum, opname, args, result, descr=None, descr_number=None, failargs=None
+    ):
         self.opnum = opnum
         self.opname = opname
         self.args = args
@@ -19,7 +21,7 @@ class FlatOp(object):
         self.core_dump = None
         self.failargs = failargs
         self.index = -1
-        self.linkid = -1 # a unique id that is generated from the descr_number
+        self.linkid = -1  # a unique id that is generated from the descr_number
 
     def get_name(self):
         return self.opname
@@ -51,28 +53,30 @@ class FlatOp(object):
         coredump = self.core_dump[1][:]
         for timepos, addr, content in patches:
             if timeval < timepos:
-                continue # do not apply the patch
+                continue  # do not apply the patch
             op_off = self.core_dump[0]
-            patch_start = (addr - base_addr) - op_off 
+            patch_start = (addr - base_addr) - op_off
             patch_end = patch_start + len(content)
-            content_end = len(content)-1
+            content_end = len(content) - 1
             if patch_end >= len(coredump):
                 patch_end = len(coredump)
                 content_end = patch_end - patch_start
-            coredump = coredump[:patch_start] + content[:content_end] + coredump[patch_end:]
+            coredump = (
+                coredump[:patch_start] + content[:content_end] + coredump[patch_end:]
+            )
         return coredump
 
     def __repr__(self):
-        suffix = ''
+        suffix = ""
         if self.result is not None:
             suffix = "%s = " % self.result
         descr = self.descr
         if descr is None:
-            descr = ''
+            descr = ""
         else:
-            descr = ', @' + str(descr)
-        return '%s%s(%s%s)' % (suffix, self.opname,
-                                ', '.join(self.args), descr)
+            descr = ", @" + str(descr)
+        return "{}{}({}{})".format(suffix, self.opname, ", ".join(self.args), descr)
+
 
 class MergePoint(FlatOp):
     def __init__(self, values):
@@ -113,9 +117,10 @@ class MergePoint(FlatOp):
         raise NotImplementedError
 
     def __repr__(self):
-        return 'debug_merge_point(xxx)'
+        return "debug_merge_point(xxx)"
 
-class Stage(object):
+
+class Stage:
     def __init__(self, mark, timeval):
         self.mark = mark
         self.ops = []
@@ -153,33 +158,36 @@ class Stage(object):
         return len(self.ops)
 
     def is_asm(self):
-        return self.mark == 'asm'
+        return self.mark == "asm"
 
     def __repr__(self):
         return 'Stage("%s", %d ops)' % (self.mark, self.get_opcount())
 
+
 from collections import namedtuple
 
-class TraceLink(namedtuple('TraceLink', 'origin target')):
+
+class TraceLink(namedtuple("TraceLink", "origin target")):
     pass
 
-class Trace(object):
+
+class Trace:
     def __init__(self, forest, trace_type, tick, unique_id, jd_name=None):
         self.forest = forest
         self.jd_name = jd_name
         self.type = trace_type
         self.inputargs = []
-        assert self.type in ('loop', 'bridge')
+        assert self.type in ("loop", "bridge")
         self.unique_id = unique_id
         self.stages = {}
         self.last_mark = None
-        self.addrs = (-1,-1)
+        self.addrs = (-1, -1)
         # this saves a quadrupel for each
         self.my_patches = None
         self.counter = 0
         self.point_counters = {}
         self.merge_point_files = defaultdict(list)
-        self.descr_number = 0 # the descr this trace is attached to
+        self.descr_number = 0  # the descr this trace is attached to
         # the trace links that lead to this trace
         self.links_up = []
         # the links leading from this trace
@@ -189,14 +197,14 @@ class Trace(object):
         self.links.append(TraceLink(PointInTrace(self, op), PointInTrace(target, None)))
 
     def backward_link(self, orig):
-        """ connect parent with this trace. orig is the point
-        in the parent trace, enter the first op in this trace """
+        """connect parent with this trace. orig is the point
+        in the parent trace, enter the first op in this trace"""
         assert isinstance(orig, PointInTrace)
         enter = PointInTrace(self, None)
         self.links_up.append(TraceLink(orig, enter))
 
     def get_id(self):
-        """ Return the unique id for that trace object """
+        """Return the unique id for that trace object"""
         return self.unique_id
 
     def add_up_enter_count(self, count):
@@ -217,7 +225,7 @@ class Trace(object):
         return None
 
     def get_first_merge_point(self):
-        stage = self.get_stage('opt')
+        stage = self.get_stage("opt")
         if stage:
             mps = stage.get_merge_points()
             if len(mps) != 0:
@@ -229,11 +237,11 @@ class Trace(object):
         return self.stages.get(type, None)
 
     def start_mark(self, mark):
-        mark_name = 'noopt'
+        mark_name = "noopt"
         if mark == const.MARK_TRACE_OPT:
-            mark_name = 'opt'
+            mark_name = "opt"
         elif mark == const.MARK_TRACE_ASM:
-            mark_name = 'asm'
+            mark_name = "asm"
         else:
             assert mark == const.MARK_TRACE
             if self.last_mark == mark_name:
@@ -279,7 +287,7 @@ class Trace(object):
                         dict[nmr] = PointInTrace(self, op)
                     else:
                         pass
-                        #sys.stderr.write("duplicate descr: 0x%x\n" % nmr)
+                        # sys.stderr.write("duplicate descr: 0x%x\n" % nmr)
 
                 if op.get_name() == "label":
                     self.forest.labels[nmr] = PointInTrace(self, op)
@@ -287,7 +295,7 @@ class Trace(object):
                     self.forest.jumps[nmr] = PointInTrace(self, op)
 
         if op.get_name() == "increment_debug_counter":
-            prev_op = stage.get_op(op.index-1)
+            prev_op = stage.get_op(op.index - 1)
             # look for the previous operation, it is a label saved
             # in descr_number_to_point_in_trace
             if prev_op:
@@ -301,19 +309,21 @@ class Trace(object):
                 self.merge_point_files[filename].append(lineno)
 
     def is_bridge(self):
-        return self.type == 'bridge'
+        return self.type == "bridge"
 
     def set_inputargs(self, args):
         self.inputargs = args
 
     def set_addr_bounds(self, a, b):
-        self.addrs = (a,b)
+        self.addrs = (a, b)
         if a in self.forest.addrs:
-            sys.stderr.write("jit log sets address bounds to a location another trace already is resident of\n")
+            sys.stderr.write(
+                "jit log sets address bounds to a location another trace already is resident of\n"
+            )
         self.forest.addrs[a] = self
 
     def is_assembled(self):
-        """ return True if the jit log indicated to have assembled this trace """
+        """return True if the jit log indicated to have assembled this trace"""
         return self.addrs[0] != -1
 
     def get_addrs(self):
@@ -327,9 +337,9 @@ class Trace(object):
             return False
         return self.addrs[0] <= addr <= self.addrs[1]
 
-    def get_core_dump(self, timeval=-1, opslice=(0,-1)):
+    def get_core_dump(self, timeval=-1, opslice=(0, -1)):
         if timeval == -1:
-            timeval = 2**31-1 # a very high number
+            timeval = 2**31 - 1  # a very high number
         if self.my_patches is None:
             self.my_patches = []
             for patch in self.forest.patches:
@@ -338,27 +348,27 @@ class Trace(object):
                     self.my_patches.append(patch)
 
         core_dump = []
-        start,end = opslice
+        start, end = opslice
         if end == -1:
             end = len(opslice)
         ops = None
-        stage = self.get_stage('asm')
+        stage = self.get_stage("asm")
         if not stage:
-            return None # no core dump!
+            return None  # no core dump!
         for i, op in enumerate(stage.get_ops()):
             if start <= i <= end:
                 dump = op.get_core_dump(self.addrs[0], self.my_patches, timeval)
                 core_dump.append(dump)
-        return ''.join(core_dump)
+        return "".join(core_dump)
 
     def get_name(self):
-        stage = self.get_stage('opt')
+        stage = self.get_stage("opt")
         if not stage:
             pass
-        return 'unknown'
+        return "unknown"
 
     def get_failing_guard(self):
-        """ return the resoperation (FlatOp) for the descr this trace is attached to """
+        """return the resoperation (FlatOp) for the descr this trace is attached to"""
         if len(self.links_up) > 0:
             for link in self.links_up:
                 origin = link.origin
@@ -367,7 +377,8 @@ class Trace(object):
         return None
 
     def __repr__(self):
-        return 'Trace(%d, 0x%x, %d)' % (self.unique_id, id(self), len(self.stages))
+        return "Trace(%d, 0x%x, %d)" % (self.unique_id, id(self), len(self.stages))
+
 
 def iter_ranges(numbers):
     if len(numbers) == 0:
@@ -377,17 +388,18 @@ def iter_ranges(numbers):
     last = numbers[0]
     for pos, i in enumerate(numbers[1:]):
         if (i - first) > 50:
-            yield range(first, last+1)
-            if pos+1 < len(numbers):
+            yield range(first, last + 1)
+            if pos + 1 < len(numbers):
                 last = i
                 first = i
             else:
                 return
         else:
             last = i
-    yield range(first, last+1)
+    yield range(first, last + 1)
 
-class PointInTrace(object):
+
+class PointInTrace:
     def __init__(self, trace, op):
         self.trace = trace
         self.op = op
@@ -405,7 +417,7 @@ class PointInTrace(object):
 
     def add_up_enter_count(self, count):
         if not self.inc_op:
-            return False# this is a label!
+            return False  # this is a label!
         counters = self.trace.point_counters
         i = self.inc_op.index
         c = counters.get(i, 0)
@@ -413,28 +425,33 @@ class PointInTrace(object):
         return True
 
     def __repr__(self):
-        return "PointInTrace(%s, op %s)" % (self.trace, self.op)
+        return f"PointInTrace({self.trace}, op {self.op})"
+
 
 def decode_source(source_bytes):
     # copied from _bootstrap_external.py
     """Decode bytes representing source code and return the string.
     Universal newline support is used in the decoding.
     """
-    import _io
     import tokenize  # To avoid bootstrap issues.
+
+    import _io
+
     source_bytes_readline = _io.BytesIO(source_bytes).readline
     encoding = tokenize.detect_encoding(source_bytes_readline)
     newline_decoder = _io.IncrementalNewlineDecoder(None, True)
     return newline_decoder.decode(source_bytes.decode(encoding[0]))
 
+
 def read_python_source(file):
-    with open(file, 'rb') as fd:
+    with open(file, "rb") as fd:
         data = fd.read()
         if PY3:
             data = decode_source(data)
         return data
 
-class TraceForest(object):
+
+class TraceForest:
     def __init__(self, version, is_32bit=False, machine=None):
         self.word_size = 4 if is_32bit else 8
         self.version = version
@@ -451,7 +468,7 @@ class TraceForest(object):
         # a mapping from source file name -> {lineno: (indent, line)}
         self.source_lines = defaultdict(dict)
         self.descr_nmr_to_point_in_trace = {}
-        self.exc = None # holds an exception object if an error occured
+        self.exc = None  # holds an exception object if an error occured
         self.labels = {}
         self.jumps = {}
         self.redirect_descrs = {}
@@ -504,12 +521,12 @@ class TraceForest(object):
                 saved_lines = self.source_lines[file]
                 for int_range in iter_ranges(lines):
                     for r in int_range:
-                        line = split_lines[r-1]
+                        line = split_lines[r - 1]
                         data = line.lstrip()
                         diff = len(line) - len(data)
                         indent = diff
                         for i in range(0, diff):
-                            if line[i] == '\t':
+                            if line[i] == "\t":
                                 indent += 7
                         saved_lines[r] = (indent, data)
         return True
@@ -524,7 +541,7 @@ class TraceForest(object):
         return self.traces.get(id, None)
 
     def add_trace(self, trace_type, unique_id, trace_nmr, jd_name=None):
-        """ Create a new trace object and attach it to the forest """
+        """Create a new trace object and attach it to the forest"""
         trace = Trace(self, trace_type, self.timepos, unique_id, jd_name)
         trace.stamp = len(self.traces)
         self.traces[unique_id] = trace
@@ -536,11 +553,11 @@ class TraceForest(object):
         bridge = self.get_trace_by_addr(addr_to)
         if bridge is None:
             raise Exception("bridge is None")
-        #assert bridge.descr_number == 0, "a bridge can only be stitched once"
-        #bridge.descr_number = descr_number
+        # assert bridge.descr_number == 0, "a bridge can only be stitched once"
+        # bridge.descr_number = descr_number
         # TODO remove this
         self.stitches[descr_number] = bridge.unique_id
-        assert bridge is not None, ("no trace to be found for addr 0x%x" % addr_to)
+        assert bridge is not None, "no trace to be found for addr 0x%x" % addr_to
         point_in_trace = self.get_point_in_trace_by_descr(descr_number)
         if not point_in_trace:
             sys.stderr.write("link to trace of descr 0x%x not found!\n" % descr_number)
@@ -572,15 +589,15 @@ class TraceForest(object):
             marks.append(const.MARK_SOURCE_CODE)
             data = filename
             if PY3:
-                data = data.encode('utf-8')
-            marks.append(struct.pack('<I', len(data)))
+                data = data.encode("utf-8")
+            marks.append(struct.pack("<I", len(data)))
             marks.append(data)
 
-            marks.append(struct.pack('<H', len(lines)))
+            marks.append(struct.pack("<H", len(lines)))
             for lineno, (indent, line) in lines.items():
-                marks.append(struct.pack('<HBI', lineno, indent, len(line)))
-                marks.append(line.encode('utf-8'))
-        return b''.join(marks)
+                marks.append(struct.pack("<HBI", lineno, indent, len(line)))
+                marks.append(line.encode("utf-8"))
+        return b"".join(marks)
 
     def add_source_code_line(self, filename, lineno, indent, line):
         dict = self.source_lines[filename]
@@ -601,11 +618,17 @@ class TraceForest(object):
         # setup the object properties
         trace = self.get_trace_by_id(trace_id)
         if trace is None:
-            sys.stderr.write("could not redirect_assembler 0x%x 0x%x id 0x%x\n" % (descr_number, new_descr_number, trace_id))
+            sys.stderr.write(
+                "could not redirect_assembler 0x%x 0x%x id 0x%x\n"
+                % (descr_number, new_descr_number, trace_id)
+            )
             return
         point_in_trace = self.get_point_in_trace_by_descr(descr_number)
         if not point_in_trace:
-            sys.stderr.write("redirect call assembler: link to trace of descr 0x%x not found trace %d!\n" % (descr_number, trace_id))
+            sys.stderr.write(
+                "redirect call assembler: link to trace of descr 0x%x not found trace %d!\n"
+                % (descr_number, trace_id)
+            )
         else:
             parent = point_in_trace.trace
             op = point_in_trace.op
