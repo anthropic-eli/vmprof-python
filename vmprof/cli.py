@@ -1,7 +1,6 @@
 import argparse
+import configparser
 import sys
-
-from six.moves import configparser
 
 
 def build_argparser():
