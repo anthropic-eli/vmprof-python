@@ -147,7 +147,6 @@ setup(
     cmdclass={"build_py": vmprof_build},
     install_requires=[
         "requests",
-        "six",
         "pytz",
         "colorama",
     ]
